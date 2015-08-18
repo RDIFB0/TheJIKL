@@ -6,8 +6,6 @@
 
 #define MAX_LOADSTRING 100
 
-#define WM_INPUTLANGCHANGE_SYSCHARSET 0x0001
-
 #define VK_Z 0x5A
 #define VK_X 0x58
 #define VK_C 0x43

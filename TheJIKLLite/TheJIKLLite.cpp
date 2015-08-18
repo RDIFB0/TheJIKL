@@ -25,6 +25,13 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 
+	// Check another instance
+	HANDLE mutex = CreateMutex(NULL, FALSE, TEXT("TheJIKL"));
+	if (GetLastError() == ERROR_ALREADY_EXISTS || GetLastError() == ERROR_ACCESS_DENIED)
+	{
+		return 1;
+	}
+
  	// TODO: Place code here.
 	MSG msg;
 	HACCEL hAccelTable;
@@ -120,7 +127,8 @@ void ChangeLayout(HKL hLayout)
     GetGUIThreadInfo(0, &threadInfo);
 
     HWND hWnd = (threadInfo.hwndFocus != NULL) ? threadInfo.hwndFocus : threadInfo.hwndActive;
-    PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, WM_INPUTLANGCHANGE_SYSCHARSET, (UINT)hLayout);
+	// reinterpret_cast<LPARAM>(layout)
+    PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, (LPARAM)hLayout);
 }
 
 void SetHook(HWND hWnd)
