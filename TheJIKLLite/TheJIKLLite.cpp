@@ -127,8 +127,13 @@ void ChangeLayout(HKL hLayout)
     GetGUIThreadInfo(0, &threadInfo);
 
     HWND hWnd = (threadInfo.hwndFocus != NULL) ? threadInfo.hwndFocus : threadInfo.hwndActive;
-	// reinterpret_cast<LPARAM>(layout)
-    PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, (LPARAM)hLayout);
+    // PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, (LPARAM)hLayout);
+    PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, reinterpret_cast<LPARAM>(hLayout));
+
+	/*
+	DWORD recipients = BSM_APPLICATIONS;
+	return (0 < ::BroadcastSystemMessage(BSF_POSTMESSAGE, &recipients, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, reinterpret_cast<LPARAM>(mozc_hkl)));
+	*/
 }
 
 void SetHook(HWND hWnd)
@@ -331,6 +336,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			switch (wParam)
 			{
 			case HSHELL_WINDOWACTIVATED:
+			case HSHELL_RUDEAPPACTIVATED:
 				SetupLayout((HWND)lParam);
 				break;
 			}
