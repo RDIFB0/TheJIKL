@@ -98,9 +98,7 @@ void TrayLoadPopupMenu(HWND hWnd) {
 BOOL ReadLayouts()
 {
 	const int MAX_LAYOUTS = 2;
-
 	int nElements = GetKeyboardLayoutList(0, nullptr);
-
 	if (nElements < MAX_LAYOUTS)
 	{
 		return FALSE;
@@ -126,11 +124,29 @@ void ChangeLayout(HKL hLayout)
 	threadInfo.cbSize = sizeof(threadInfo);
     GetGUIThreadInfo(0, &threadInfo);
 
+	/*
     HWND hWnd = (threadInfo.hwndFocus != NULL) ? threadInfo.hwndFocus : threadInfo.hwndActive;
-    // PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, (LPARAM)hLayout);
     PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, reinterpret_cast<LPARAM>(hLayout));
+	*/
+
+	HWND hWnd = NULL;
+	if (threadInfo.hwndCaret != NULL) {
+		hWnd = threadInfo.hwndCaret;
+	}
+	else if (threadInfo.hwndFocus != NULL) {
+		hWnd = threadInfo.hwndFocus;
+	}
+	else if (threadInfo.hwndActive != NULL) {
+		hWnd = threadInfo.hwndActive;
+	}
+
+	if (hWnd != NULL) {
+		PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, reinterpret_cast<LPARAM>(hLayout));
+	}
 
 	/*
+    PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, (LPARAM)hLayout);
+
 	DWORD recipients = BSM_APPLICATIONS;
 	return (0 < ::BroadcastSystemMessage(BSF_POSTMESSAGE, &recipients, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, reinterpret_cast<LPARAM>(mozc_hkl)));
 	*/
