@@ -6,27 +6,17 @@
 #include "stdafx.h"
 #include "TheJIKLLite.h"
 #include "NTKbdLites.h"
+#include "Keyboard.h"
 
-LayoutInfo layoutInfo;
+#include <stdio.h> // fopen
 
-HHOOK hookHandle;
-UINT shellHookMessage;
-BOOL hooked;
-BOOL modified;
-
-// *****************
-
-
-int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPTSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+int APIENTRY _tWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPTSTR lpCmdLine, _In_ int nCmdShow)
 {
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 
 	// Check another instance
-	HANDLE mutex = CreateMutex(NULL, FALSE, TEXT("TheJIKL"));
+	APP.mutex = CreateMutex(NULL, FALSE, TEXT("TheJIKL"));
 	if (GetLastError() == ERROR_ALREADY_EXISTS || GetLastError() == ERROR_ACCESS_DENIED)
 	{
 		return 1;
@@ -44,6 +34,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	// Perform application initialization:
 	if (!InitInstance (hInstance, nCmdShow))
 	{
+		CloseHandle(APP.mutex);
 		return FALSE;
 	}
 	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_THEJIKLLITE));
@@ -105,15 +96,15 @@ BOOL ReadLayouts()
 	}
 
 	// var ids = new IntPtr[nElements];
-	layoutInfo.lpList = (HKL*)LocalAlloc(LPTR, (nElements * sizeof(HKL)));
+	APP.layoutInfo.lpList = (HKL*)LocalAlloc(LPTR, (nElements * sizeof(HKL)));
 	// layoutInfo.lpList = new HKL[MAX_LAYOUTS];
 
-	nElements = GetKeyboardLayoutList(nElements, layoutInfo.lpList);
+	nElements = GetKeyboardLayoutList(nElements, APP.layoutInfo.lpList);
 	if (MAX_LAYOUTS > nElements) {
 		return FALSE;
 	}
 
-	layoutInfo.first = TRUE;
+	APP.layoutInfo.first = TRUE;
 
 	return TRUE;
 }
@@ -152,30 +143,35 @@ void ChangeLayout(HKL hLayout)
 	*/
 }
 
+void ChangeLayoutEmulate()
+{
+	keybd_event(VK_LWIN, 0, KEYEVENTF_EXTENDEDKEY, 0);
+	keybd_event(VK_SPACE, 0, KEYEVENTF_EXTENDEDKEY, 0);
+	Sleep(10);
+	keybd_event(VK_SPACE, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+	keybd_event(VK_LWIN, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+}
+
 void SetHook(HWND hWnd)
 {
-	hooked = false;
-	modified = false;
-	hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, KeyHandler, hInst, 0);
+	APP.hooked = false;
+	APP.modified = false;
 
-	shellHookMessage = RegisterWindowMessage(TEXT("SHELLHOOK"));
+	APP.hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, KeyHandler, hInst, 0);
+
+	APP.shellHookMessage = RegisterWindowMessage(TEXT("SHELLHOOK"));
 	RegisterShellHookWindow(hWnd);
+
+	HookRawInput(hWnd);
 }
 
 void UnSetHook()
 {
-	if (hookHandle != NULL) {
-		UnhookWindowsHookEx(hookHandle);
+	if (APP.hookHandle != NULL) {
+		UnhookWindowsHookEx(APP.hookHandle);
 	}
 }
 
-void KeyDownUp(BYTE vkCode)
-{
-	BYTE scanCode = (BYTE)MapVirtualKey(vkCode, 0);
-	// 0x39
-	keybd_event(vkCode, scanCode, KEYEVENTF_EXTENDEDKEY | 0, 0);
-	keybd_event(vkCode, scanCode, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
-}
 
 void LightOn(BOOL on)
 {
@@ -196,11 +192,155 @@ void SetupLayout(HWND hWnd)
 	DWORD processId;
 	DWORD threadId = GetWindowThreadProcessId(hWnd, &processId);
 	HKL layout = GetKeyboardLayout(threadId);
-	layoutInfo.first = layout == layoutInfo.lpList[0];
+	APP.layoutInfo.first = layout == APP.layoutInfo.lpList[0];
 
-	LightOn(layoutInfo.first ? FALSE : TRUE);
+	LightOn(APP.layoutInfo.first ? FALSE : TRUE);
 }
 
+void DrawStats()
+{
+	HDC hDC_Desktop = GetDC(0);
+
+	RECT rect = { 20, 20, 200, 200 };
+	HBRUSH blueBrush = CreateSolidBrush(RGB(0, 0, 255));
+	FillRect(hDC_Desktop, &rect, blueBrush);
+}
+
+void ErrorLastDebugString()
+{
+	wchar_t buf[256];
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 256, NULL);
+	OutputDebugString(buf);
+	OutputDebugString(L"\n");
+}
+
+bool HookRawInput(HWND hWnd)
+{
+	UINT numDevices;
+	if (GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST)) != 0) {
+		return FALSE;
+	}
+	auto pDeviceData = new RAWINPUTDEVICELIST[numDevices];
+	if (GetRawInputDeviceList(pDeviceData, &numDevices, sizeof(RAWINPUTDEVICELIST)) == -1) {
+		delete[] pDeviceData;
+		return FALSE;
+	}
+
+	UINT rimHIDregistered = 0;
+	for (UINT i = 0; i < numDevices; ++i)
+	{
+		HANDLE hDevice = pDeviceData[i].hDevice;
+		DWORD dwType = pDeviceData[i].dwType;
+
+		switch (dwType) {
+		case RIM_TYPEMOUSE:
+		case RIM_TYPEKEYBOARD:
+			continue;
+		case RIM_TYPEHID:
+			break;
+		}
+
+		/*
+		UINT infoSize;
+		if (GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, nullptr, &infoSize) == -1) {
+			ErrorLastDebugString();
+		}
+		wchar_t *deviceName = new wchar_t[infoSize];
+		if (GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, deviceName, &infoSize) == -1) {
+			ErrorLastDebugString();
+		}
+		OutputDebugString(deviceName);
+		OutputDebugString(L"\n");
+		delete[] deviceName;
+		*/
+
+		UINT infoSize;
+		if (GetRawInputDeviceInfo(hDevice, RIDI_DEVICEINFO, nullptr, &infoSize) == -1) {
+			ErrorLastDebugString();
+		}
+
+		RID_DEVICE_INFO deviceInfo = { 0 };
+		deviceInfo.cbSize = infoSize = sizeof(deviceInfo);
+		if (GetRawInputDeviceInfo(hDevice, RIDI_DEVICEINFO, &deviceInfo, &infoSize) == -1) {
+			ErrorLastDebugString();
+		}
+
+		WCHAR debugBuffer[255];
+		wsprintf(debugBuffer, L"Vendor ID: %d (0x%04x)\n", deviceInfo.hid.dwVendorId, deviceInfo.hid.dwVendorId);
+		OutputDebugString(debugBuffer);
+		wsprintf(debugBuffer, L"Product ID: %d (0x%04x)\n", deviceInfo.hid.dwProductId, deviceInfo.hid.dwProductId);
+		OutputDebugString(debugBuffer);
+		wsprintf(debugBuffer, L"Version number: %d (0x%04x)\n", deviceInfo.hid.dwVersionNumber, deviceInfo.hid.dwVersionNumber);
+		OutputDebugString(debugBuffer);
+		wsprintf(debugBuffer, L"Usage page: %d (0x%02x)\n", deviceInfo.hid.usUsagePage, deviceInfo.hid.usUsagePage);
+		OutputDebugString(debugBuffer);
+		wsprintf(debugBuffer, L"Usage: %d (0x%02x)\n", deviceInfo.hid.usUsage, deviceInfo.hid.usUsage);
+		OutputDebugString(debugBuffer);
+
+		// Das Keyboard Model S for Mac:
+		// HID\VID_04D9&PID_1900&MI_01\8 & C9452 & 0 & 0000
+		// Vendor ID: 1241 (0x04d9)
+		// Product ID : 6400 (0x1900)
+		// Version number : 264 (0x0108)
+		// Usage page : 12 (0x0c)
+		// Usage : 1 (0x01)
+		if (deviceInfo.hid.dwVendorId == 0x04D9 && deviceInfo.hid.dwProductId == 0x1900) {
+			rimHIDregistered = 1;
+
+			RAWINPUTDEVICE rid = { 0 };
+			rid.usUsagePage = deviceInfo.hid.usUsagePage;
+			rid.usUsage = deviceInfo.hid.usUsage;
+			rid.dwFlags = RIDEV_INPUTSINK;
+			rid.hwndTarget = hWnd;
+			if (RegisterRawInputDevices(&rid, 1, sizeof(RAWINPUTDEVICE)) == FALSE) {
+				DebugBreak();
+				ErrorLastDebugString();
+			}
+		}
+	}
+
+	delete[] pDeviceData;
+
+	return rimHIDregistered > 0;
+}
+
+void OutputDebugHex(void *ptr, DWORD dwSize)
+{
+	WCHAR charBuf[255];
+	DWORD i;
+	BYTE *b = (BYTE *)ptr;
+	for (i = 0; i < dwSize; ++i) {
+		wsprintf(charBuf, L"0x%02x ", b[i]);
+		OutputDebugString(charBuf);
+		if (i % 16 == 0)
+			OutputDebugString(L"\n");
+	}
+	OutputDebugString(L"--------------------\n");
+}
+
+void OutputDebugHexFile(void *ptr, DWORD dwSize)
+{
+	FILE *f;
+	fopen_s(&f, "debug.log", "a");
+	DWORD i;
+	BYTE *b = (BYTE *)ptr;
+	for (i = 0; i < dwSize; i++) {
+		fprintf(f, "0x%02x ", b[i]);
+		if (i % 16 == 0) {
+			//fprintf(f, "\n");
+		}
+	}
+	fprintf(f, "\n--------------------\n");
+	fclose(f);
+}
+
+void OutputDebugHexFileB(BYTE *bytes, DWORD dwSize)
+{
+	FILE *f;
+	fopen_s(&f, "debug.bin", "a");
+	fwrite(bytes, sizeof(BYTE), dwSize, f);
+	fclose(f);
+}
 
 //
 //  FUNCTION: MyRegisterClass()
@@ -244,8 +384,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    hInst = hInstance; // Store instance handle in our global variable
 
-   hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, NULL, NULL, hInstance, NULL);
+   hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, NULL, NULL, hInstance, NULL);
 
    if (!hWnd)
    {
@@ -283,8 +422,10 @@ void DeinitInstance()
 	// remove ll keyboard hook
 	UnSetHook();
 
-	LocalFree(layoutInfo.lpList);
+	LocalFree(APP.layoutInfo.lpList);
 	// delete[] layoutInfo.lpList;
+
+	CloseHandle(APP.mutex);
 }
 
 
@@ -345,9 +486,55 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 
+	case WM_INPUT: {
+		UINT dwSize;
+		GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
+		LPBYTE lpb = new BYTE[dwSize];
+		if (lpb == NULL)
+		{
+			return 0;
+		}
+
+		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER)) != dwSize) {
+			ErrorLastDebugString();
+		}
+
+		RAWINPUT* raw = (RAWINPUT*)lpb;
+		if (raw->header.dwType == RIM_TYPEHID) {
+			UINT infoSize;
+			if (GetRawInputDeviceInfo(raw->header.hDevice, RIDI_DEVICEINFO, nullptr, &infoSize) == -1) {
+				ErrorLastDebugString();
+			}
+			RID_DEVICE_INFO deviceInfo = { 0 };
+			deviceInfo.cbSize = infoSize = sizeof(deviceInfo);
+			if (GetRawInputDeviceInfo(raw->header.hDevice, RIDI_DEVICEINFO, &deviceInfo, &infoSize) == -1) {
+				ErrorLastDebugString();
+			}
+			if (deviceInfo.hid.dwVendorId == 0x04D9 && deviceInfo.hid.dwProductId == 0x1900) {
+				/*
+				for (DWORD i = 0; i < raw->data.hid.dwCount; i++) {
+					BYTE* buf = &raw->data.hid.bRawData[raw->data.hid.dwSizeHid * i];
+					OutputDebugHexFileB(buf, raw->data.hid.dwSizeHid);
+				}
+				*/
+				unsigned short value = *(unsigned short *)&raw->data.hid.bRawData;
+				if (value == 0x0800) {
+					Keyboard::KeyDown(VK_INSERT);
+				}
+				else if (value == 0x0000) {
+					Keyboard::KeyUp(VK_INSERT);
+				}
+			}
+		}
+
+		delete[] lpb;
+		return DefWindowProc(hWnd, message, wParam, lParam);
+		//return 0;
+	}
+
 	default:
 
-		if (message == shellHookMessage)
+		if (message == APP.shellHookMessage)
 		{
 			switch (wParam)
 			{
@@ -390,90 +577,181 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 LRESULT CALLBACK KeyHandler(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	// == HC_ACTION
-	if (nCode < 0)
+	if (nCode < 0 || nCode != HC_ACTION)
 	{
-		return CallNextHookEx(hookHandle, nCode, wParam, lParam);
+		return CallNextHookEx(APP.hookHandle, nCode, wParam, lParam);
 	}
 
 	// cout << ((KBDLLHOOKSTRUCT *) lParam)->vkCode << endl;
-	KBDLLHOOKSTRUCT *khs = (KBDLLHOOKSTRUCT *) lParam;
+	KBDLLHOOKSTRUCT *khs = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
 
+	/*
+	SYSKEYS:
+		ALT + any key
+		F10
+	*/
 	if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
 	{
+		// if ((khs->flags & LLKHF_INJECTED) == 0) { }
+
 		switch(khs->vkCode)
 		{
 		case VK_CAPITAL:
-			if (layoutInfo.first)
+			if (APP.layoutInfo.first)
 			{
-				ChangeLayout(layoutInfo.lpList[1]);
-				layoutInfo.first = FALSE;
+				 ChangeLayout(APP.layoutInfo.lpList[1]);
+				//ChangeLayoutEmulate();
+				APP.layoutInfo.first = FALSE;
 				LightOn(TRUE);
 			}
 			else
 			{
-				ChangeLayout(layoutInfo.lpList[0]);
-				layoutInfo.first = TRUE;
+				 ChangeLayout(APP.layoutInfo.lpList[0]);
+				//ChangeLayoutEmulate();
+				APP.layoutInfo.first = TRUE;
 				LightOn(FALSE);
 			}
-			return 1;
+			Swallow
 			break;
+
 		case VK_SPACE:
-			modified = TRUE;
-			hooked = FALSE;
-			return 1;
+			APP.modified = TRUE;
+			APP.hooked = FALSE;
+			//DrawStats();
+			Swallow
 			break;
 		}
-		if (modified)
+
+		if (APP.isMacEmu) {
+			switch (khs->vkCode)
+			{
+			case VK_LWIN:
+				Keyboard::KeyDown(VK_LMENU);
+				Swallow
+			case VK_RWIN:
+				Keyboard::KeyDown(VK_RMENU);
+				Swallow
+			case VK_LMENU:
+				Keyboard::KeyDown(VK_LWIN);
+				Swallow
+			case VK_RMENU:
+				Keyboard::KeyDown(VK_RWIN);
+				Swallow
+			case VK_F13:
+				Keyboard::KeyDown(VK_SNAPSHOT);
+				Swallow
+			case VK_F14:
+				Keyboard::KeyDown(VK_SCROLL);
+				Swallow
+			case VK_F15:
+				Keyboard::KeyDown(VK_PAUSE);
+				Swallow
+			}
+		}
+
+		if (APP.modified)
 			switch (khs->vkCode) {
 			// WinAmp
-			case VK_Z:
-				hooked = TRUE;
-				KeyDownUp(VK_MEDIA_PREV_TRACK);
-				return 1;
-			case VK_X :
-				hooked = TRUE;
-				KeyDownUp(VK_MEDIA_STOP);
-				KeyDownUp(VK_MEDIA_PLAY_PAUSE);
-				return 1;
-			case VK_C:
-				hooked = TRUE;
-				KeyDownUp(VK_MEDIA_PLAY_PAUSE);
-				return 1;
-			case VK_V:
-				hooked = TRUE;
-				KeyDownUp(VK_MEDIA_STOP);
-				return 1;
-			case VK_B:
-				hooked = TRUE;
-				KeyDownUp(VK_MEDIA_NEXT_TRACK);
-				return 1;
-
+			case VK_KEY_Z:
+				APP.hooked = TRUE;
+				Keyboard::KeyPress(VK_MEDIA_PREV_TRACK);
+				Swallow
+			case VK_KEY_X :
+				APP.hooked = TRUE;
+				Keyboard::KeyPress(VK_MEDIA_STOP);
+				Keyboard::KeyPress(VK_MEDIA_PLAY_PAUSE);
+				Swallow
+			case VK_KEY_C:
+				APP.hooked = TRUE;
+				Keyboard::KeyPress(VK_MEDIA_PLAY_PAUSE);
+				Swallow
+			case VK_KEY_V:
+				APP.hooked = TRUE;
+				Keyboard::KeyPress(VK_MEDIA_STOP);
+				Swallow
+			case VK_KEY_B:
+				APP.hooked = TRUE;
+				Keyboard::KeyPress(VK_MEDIA_NEXT_TRACK);
+				Swallow
+			// Mac emu
+			case VK_KEY_M:
+				APP.hooked = TRUE;
+				APP.isMacEmu = !APP.isMacEmu;
+				Swallow
+			// Volume
+			case VK_UP:
+				APP.hooked = TRUE;
+				Keyboard::KeyPress(VK_VOLUME_UP);
+				Swallow
+			case VK_DOWN:
+				APP.hooked = TRUE;
+				Keyboard::KeyPress(VK_VOLUME_DOWN);
+				Swallow
 		}
 	} else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
 
-		if (modified)
+		if (APP.modified) {
 			switch (khs->vkCode) {
-			// WinAmp
-			case VK_Z:
-			case VK_X:
-			case VK_C:
-			case VK_V:
-			case VK_B:
-				return 1;
+				// WinAmp
+			case VK_KEY_Z:
+			case VK_KEY_X:
+			case VK_KEY_C:
+			case VK_KEY_V:
+			case VK_KEY_B:
+				Swallow
+				// Mac emu
+			case VK_KEY_M:
+				Swallow
+				// Volume
+			case VK_UP:
+			case VK_DOWN:
+				Swallow
 
 			case VK_SPACE:
-				modified = FALSE;
-				if (hooked) {
-					hooked = FALSE;
-					return 1;
+				APP.modified = FALSE;
+				if (APP.hooked) {
+					APP.hooked = FALSE;
+					Swallow
 				}
-				KeyDownUp(VK_SPACE);
-				return 1;
+				Keyboard::KeyPress(VK_SPACE);
+				Swallow
+			}
+		}
+		else {
 
+			switch (khs->vkCode) {
 			case VK_CAPITAL:
-				return 1;
+				Swallow
+			}
+
+			if (APP.isMacEmu) {
+				switch (khs->vkCode) {
+				case VK_LWIN:
+					Keyboard::KeyUp(VK_LMENU);
+					Swallow
+				case VK_RWIN:
+					Keyboard::KeyUp(VK_RMENU);
+					Swallow
+				case VK_LMENU:
+					Keyboard::KeyUp(VK_LWIN);
+					Swallow
+				case VK_RMENU:
+					Keyboard::KeyUp(VK_RWIN);
+					Swallow
+				case VK_F13:
+					Keyboard::KeyUp(VK_SNAPSHOT);
+					Swallow
+				case VK_F14:
+					Keyboard::KeyUp(VK_SCROLL);
+					Swallow
+				case VK_F15:
+					Keyboard::KeyUp(VK_PAUSE);
+					Swallow
+				}
+			}
+
 		}
 	}
 
-	return CallNextHookEx(hookHandle, nCode, wParam, lParam);
+	return CallNextHookEx(APP.hookHandle, nCode, wParam, lParam);
 }

@@ -6,14 +6,10 @@
 
 #define MAX_LOADSTRING 100
 
-#define VK_Z 0x5A
-#define VK_X 0x58
-#define VK_C 0x43
-#define VK_V 0x56
-#define VK_B 0x42
-
 #define TRAY_ICONUID 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
+
+#define Swallow return 1;
 
 
 // Global Variables:
@@ -33,6 +29,20 @@ struct LayoutInfo {
 	BOOL first;
 };
 
+struct App_t
+{
+	HANDLE mutex;
+
+	LayoutInfo layoutInfo;
+
+	HHOOK hookHandle;
+	UINT shellHookMessage;
+	BOOL hooked;
+	BOOL modified;
+
+	BOOL isMacEmu;
+} APP;
+
 void DeinitInstance();
 void DeinitWindow(HWND hWnd);
 
@@ -41,8 +51,12 @@ void TrayDeleteIcon(HWND hWnd);
 void TrayLoadPopupMenu(HWND hWnd);
 BOOL ReadLayouts();
 void ChangeLayout(HKL hLayout);
+void ChangeLayoutEmulate();
 void SetHook(HWND hWnd);
 void UnSetHook();
-void KeyDownUp(BYTE vkCode);
+
 void LightOn(BOOL on);
 void SetupLayout(HWND hWnd);
+
+bool HookRawInput(HWND hWnd);
+
