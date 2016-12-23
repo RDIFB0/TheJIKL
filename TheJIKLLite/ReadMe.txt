@@ -257,3 +257,19 @@ Apps              E0 5D  VK_APPS                0x5D
                   E0 6D  VK_LAUNCH_MEDIA_SELECT 0xB5
 compMgmtLauncher  E0 6B  VK_LAUNCH_APP1         0xB6
 calc.exe          E0 21  VK_LAUNCH_APP2         0xB7
+
+
+KeyboardProc callback function
+lParam [in]
+
+    Type: LPARAM
+
+    The repeat count, scan code, extended-key flag, context code, previous key-state flag, and transition-state flag. For more information about the lParam parameter, see Keystroke Message Flags. The following table describes the bits of this value.
+    Bits	Description
+    0-15	The repeat count. The value is the number of times the keystroke is repeated as a result of the user's holding down the key.
+    16-23	The scan code. The value depends on the OEM.
+    24	Indicates whether the key is an extended key, such as a function key or a key on the numeric keypad. The value is 1 if the key is an extended key; otherwise, it is 0.
+    25-28	Reserved.
+    29	The context code. The value is 1 if the ALT key is down; otherwise, it is 0.
+    30	The previous key state. The value is 1 if the key is down before the message is sent; it is 0 if the key is up.
+    31	The transition state. The value is 0 if the key is being pressed and 1 if it is being released.

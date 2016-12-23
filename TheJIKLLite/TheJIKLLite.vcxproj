@@ -102,11 +102,8 @@
     <ResourceCompile Include="TheJIKLLite.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\res\jikl.ico" />
-    <Image Include="icon1.ico" />
     <Image Include="small.ico" />
     <Image Include="TheJIKLLite.ico" />
-    <Image Include="tray.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

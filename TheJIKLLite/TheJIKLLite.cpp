@@ -56,13 +56,13 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstanc
 
 
 void TrayDrawIcon(HWND hWnd) {
-	NOTIFYICONDATA nid;
+	NOTIFYICONDATA nid = { 0 };
 	nid.cbSize = sizeof(NOTIFYICONDATA);
 	nid.hWnd = hWnd;
 	nid.uID = TRAY_ICONUID;
 	nid.uVersion = NOTIFYICON_VERSION;
 	nid.uCallbackMessage = WM_TRAYMESSAGE;
-	nid.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_SMALL));
+	nid.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_THEJIKLLITE));
 	LoadString(hInst, IDS_APP_TITLE, nid.szTip, 128);
 	nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
 	Shell_NotifyIcon(NIM_ADD, &nid);
@@ -363,7 +363,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.hbrBackground	= (HBRUSH)(COLOR_WINDOW+1);
 	wcex.lpszMenuName	= MAKEINTRESOURCE(IDC_THEJIKLLITE);
 	wcex.lpszClassName	= szWindowClass;
-	wcex.hIconSm		= LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+	wcex.hIconSm		= LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_THEJIKLLITE));
 
 	return RegisterClassEx(&wcex);
 }
@@ -469,6 +469,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		hdc = BeginPaint(hWnd, &ps);
 		// TODO: Add any drawing code here...
 		EndPaint(hWnd, &ps);
+		break;
+	case WM_CLOSE:
+		ShowWindow(hWnd, SW_HIDE);
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
