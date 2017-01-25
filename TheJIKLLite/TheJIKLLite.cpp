@@ -629,17 +629,29 @@ LRESULT CALLBACK KeyHandler(int nCode, WPARAM wParam, LPARAM lParam)
 			switch (khs->vkCode)
 			{
 			case VK_LWIN:
-				Keyboard::KeyDown(VK_LMENU);
-				Swallow
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
+					Keyboard::KeyDown(VK_LMENU);
+					Swallow
+				}
+				break;
 			case VK_RWIN:
-				Keyboard::KeyDown(VK_RMENU);
-				Swallow
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
+					Keyboard::KeyDown(VK_RMENU);
+					Swallow
+				}
+				break;
 			case VK_LMENU:
-				Keyboard::KeyDown(VK_LWIN);
-				Swallow
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
+					Keyboard::KeyDown(VK_LWIN);
+					Swallow
+				}
+				break;
 			case VK_RMENU:
-				Keyboard::KeyDown(VK_RWIN);
-				Swallow
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
+					Keyboard::KeyDown(VK_RWIN);
+					Swallow
+				}
+				break;
 			case VK_F13:
 				Keyboard::KeyDown(VK_SNAPSHOT);
 				Swallow
@@ -726,33 +738,45 @@ LRESULT CALLBACK KeyHandler(int nCode, WPARAM wParam, LPARAM lParam)
 			case VK_CAPITAL:
 				Swallow
 			}
+			// if APP.isMacEmu
+		}
 
-			if (APP.isMacEmu) {
-				switch (khs->vkCode) {
-				case VK_LWIN:
+		if (APP.isMacEmu) {
+			switch (khs->vkCode) {
+			case VK_LWIN:
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
 					Keyboard::KeyUp(VK_LMENU);
 					Swallow
-				case VK_RWIN:
+				}
+				break;
+			case VK_RWIN:
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
 					Keyboard::KeyUp(VK_RMENU);
 					Swallow
-				case VK_LMENU:
+				}
+				break;
+			case VK_LMENU:
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
 					Keyboard::KeyUp(VK_LWIN);
 					Swallow
-				case VK_RMENU:
+				}
+				break;
+			case VK_RMENU:
+				if ((khs->flags & LLKHF_INJECTED) == 0) {
 					Keyboard::KeyUp(VK_RWIN);
 					Swallow
-				case VK_F13:
-					Keyboard::KeyUp(VK_SNAPSHOT);
-					Swallow
-				case VK_F14:
-					Keyboard::KeyUp(VK_SCROLL);
-					Swallow
-				case VK_F15:
-					Keyboard::KeyUp(VK_PAUSE);
-					Swallow
 				}
+				break;
+			case VK_F13:
+				Keyboard::KeyUp(VK_SNAPSHOT);
+				Swallow
+			case VK_F14:
+				Keyboard::KeyUp(VK_SCROLL);
+				Swallow
+			case VK_F15:
+				Keyboard::KeyUp(VK_PAUSE);
+				Swallow
 			}
-
 		}
 	}
 
