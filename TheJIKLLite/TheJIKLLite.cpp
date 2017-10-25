@@ -7,6 +7,7 @@
 #include "TheJIKLLite.h"
 #include "NTKbdLites.h"
 #include "Keyboard.h"
+#include <Mmsystem.h>
 
 #include <stdio.h> // fopen
 
@@ -55,26 +56,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstanc
 }
 
 
-void TrayDrawIcon(HWND hWnd) {
-	NOTIFYICONDATA nid = { 0 };
-	nid.cbSize = sizeof(NOTIFYICONDATA);
-	nid.hWnd = hWnd;
-	nid.uID = TRAY_ICONUID;
-	nid.uVersion = NOTIFYICON_VERSION;
-	nid.uCallbackMessage = WM_TRAYMESSAGE;
-	nid.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_THEJIKLLITE));
-	LoadString(hInst, IDS_APP_TITLE, nid.szTip, 128);
-	nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
-	Shell_NotifyIcon(NIM_ADD, &nid);
-}
 
-void TrayDeleteIcon(HWND hWnd) {
-	NOTIFYICONDATA nid;
-	nid.cbSize = sizeof(NOTIFYICONDATA);
-	nid.hWnd = hWnd;
-	nid.uID = TRAY_ICONUID;
-	Shell_NotifyIcon(NIM_DELETE, &nid);
-}
 
 void TrayLoadPopupMenu(HWND hWnd) {
 	POINT cursor;
@@ -133,6 +115,7 @@ void ChangeLayout(HKL hLayout)
 
 	if (hWnd != NULL) {
 		PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, INPUTLANGCHANGE_SYSCHARSET, reinterpret_cast<LPARAM>(hLayout));
+		//PlaySound(L"Sounds/azafire.wav", NULL, SND_ASYNC);
 	}
 
 	/*
@@ -214,6 +197,7 @@ void ErrorLastDebugString()
 	OutputDebugString(L"\n");
 }
 
+// https://github.com/signal11/hidapi/blob/master/windows/hid.c
 bool HookRawInput(HWND hWnd)
 {
 	UINT numDevices;
@@ -400,7 +384,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    }
 
    ShowWindow(hWnd, SW_HIDE);
-   TrayDrawIcon(hWnd);
+   APP.trayIcon = new TrayIcon(hInstance, hWnd);
+   APP.trayIcon->Show();
    SetHook(hWnd);
 
    return TRUE;
@@ -412,7 +397,8 @@ void DeinitWindow(HWND hWnd)
 	DeregisterShellHookWindow(hWnd);
 
 	// remove tray icon
-	TrayDeleteIcon(hWnd);
+	APP.trayIcon->Hide();
+	delete APP.trayIcon;
 }
 
 void DeinitInstance()
@@ -579,13 +565,11 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 // Low level keyboard hook handler
 LRESULT CALLBACK KeyHandler(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	// == HC_ACTION
 	if (nCode < 0 || nCode != HC_ACTION)
 	{
 		return CallNextHookEx(APP.hookHandle, nCode, wParam, lParam);
 	}
 
-	// cout << ((KBDLLHOOKSTRUCT *) lParam)->vkCode << endl;
 	KBDLLHOOKSTRUCT *khs = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
 
 	/*
@@ -595,8 +579,6 @@ LRESULT CALLBACK KeyHandler(int nCode, WPARAM wParam, LPARAM lParam)
 	*/
 	if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
 	{
-		// if ((khs->flags & LLKHF_INJECTED) == 0) { }
-
 		switch(khs->vkCode)
 		{
 		case VK_CAPITAL:

@@ -1,13 +1,10 @@
 #pragma once
 
 #include "resource.h"
-
-#include <shellapi.h>
+//#include <shellapi.h>
+#include "TrayIcon.h"
 
 #define MAX_LOADSTRING 100
-
-#define TRAY_ICONUID 100
-#define WM_TRAYMESSAGE (WM_USER + 1)
 
 #define Swallow return 1;
 
@@ -41,13 +38,13 @@ struct App_t
 	BOOL modified;
 
 	BOOL isMacEmu;
+
+	TrayIcon* trayIcon;
 } APP;
 
 void DeinitInstance();
 void DeinitWindow(HWND hWnd);
 
-void TrayDrawIcon(HWND hWnd);
-void TrayDeleteIcon(HWND hWnd);
 void TrayLoadPopupMenu(HWND hWnd);
 BOOL ReadLayouts();
 void ChangeLayout(HKL hLayout);

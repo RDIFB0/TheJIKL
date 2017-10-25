@@ -9,9 +9,14 @@
 
 class Keyboard
 {
+	static bool IsExtendedKey(WORD vkCode);
 public:
 	static void KeyDown(WORD vkCode);
 	static void KeyUp(WORD vkCode);
 	static void KeyPress(WORD vkCode);
+
+	static void ScanDown(WORD scanCode);
+	static void ScanUp(WORD scanCode);
+	static void ScanPress(WORD scanCode);
 };
 
